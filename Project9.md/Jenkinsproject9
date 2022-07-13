@@ -1,0 +1,155 @@
+# Step 1
+
+## INSTALL AND CONFIGURE JENKINS SERVER
+
+1. Create an AWS EC2 Instance and name it Jenkins.
+
+![AWS EC2 Instance created named Jenkins](./Jenkins Instance created.png)
+
+2. Install JDK (since Jenkins is a Java-based application)
+
+`sudo apt update`
+
+![Ubuntu terminal updated](./Ubuntu updated.png)
+
+`sudo apt install default-jdk-headless`
+
+![Installation of default jdk](./Default jdk headless installed.png)
+
+3. Install Jenkins
+
+`wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -`
+`sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > \     /etc/apt/sources.list.d/jenkins.list'`
+`sudo apt update`
+
+![Preparing to install jenkins](./Jenkins installation process.png)
+
+`sudo apt-get install jenkins`
+This command will install Jenkins.
+
+![Installation of jenkins](./Jenkins installed.png)
+
+4. Make sure Jenkins is up and running
+
+`sudo systemctl status jenkins`
+This command is used to confirm the status of running. It ensures Jenkins has been installed and it's running.
+
+![Jenkins is active](./Jenkins is active and running.png)
+
+5. By default Jenkins server uses TCP port 8080 – open it by creating a new Inbound Rule in your EC2 Security Group
+
+![Addition of port 8080](./Port 8080 added to security group inbound rules.png)
+
+6. Perform initial Jenkins setup.
+From your browser access http://<Jenkins-Server-Public-IP-Address-or-Public-DNS-Name>:8080
+
+![Getting started](./Jenkins getting started page.png)
+
+`sudo cat /var/lib/jenkins/secrets/initialAdminPassword`
+We'll use this command to locate the initial default password tfor Jenkins so that we can login into the Jenkins server.
+
+![jenkins initial default default password](./Jenkins default password.png)
+Use the default password to login to Jenkins. Then you can now change the password and create your own password.
+
+![Jenkins login successful](./Logged into Jenkins.png)
+
+Click on the suggested plugins to install. 
+After installation of plugins, create an admin user.
+
+![Jenkins first admin user to be created](./Create first admin user.png)
+
+![Instance configuration](./Jenkins instance configuration page.png)
+
+![Jenkins is ready for use](./Jenkins is ready.png)
+
+# Step 2 – Configure Jenkins to retrieve source codes from GitHub using Webhooks
+In this part, you will learn how to configure a simple Jenkins job/project (these two terms can be used interchangeably). This job will be triggered by GitHub webhooks and will execute a ‘build’ task to retrieve codes from GitHub and store it locally on Jenkins server.
+
+1. Enable webhooks in your GitHub repository settings
+The steps are: login to GitHub > Settings > webhooks > add webhooks > paste the jenkins url/github-webhook/ > package json (content type) > Click add webhook at the bottom.
+
+![Configuration of webhook in github](./Config webhook in github.png)
+
+2. Go to Jenkins web console, click "New Item" and create a "Freestyle project"
+From  Jenkins dashboard, click new item > Enter a name for the project > select freestyle project > ok
+
+To connect your GitHub repository, you will need to provide its URL, you can copy from the repository itself
+
+In configuration of your Jenkins freestyle project choose Git repository, provide there the link to your Tooling GitHub repository and credentials (user/password) so Jenkins could access files in the repository.
+
+Here, copy the link from the project code in github >  click on source code management in jenkins > select Git > paste the copied code from github > click on add in credentials (jenkins) > type your github username > type your github password > click add > click credentials drop down in the new page > click on your username > apply > save
+
+![Adding information to source code management](./Config source code management.png)
+
+![Test1 project page](./Project Text1.png)
+
+Save the configuration and let us try to run the build. For now we can only do it manually.
+Click "Build Now" button, if you have configured everything correctly, the build will be successfull and you will see it under #1
+
+![Build is successful](./Build successful.png)
+Build successful after a first failed attempt.
+
+![Output of the build](./Console output.png)
+
+But this build does not produce anything and it runs only when we trigger it manually. Let us fix it.
+
+3. Click "Configure" your job/project and add these two configurations
+   Configure triggering the job from GitHub webhook:
+
+Now, we have to configure our freestyle project. 
+Clieck on configure > under build trigger, click Github hook trigger for GITScm polling > under post-build actions, select achieve artifacts > under files to achieve , input two ** (this indicates everything should be achieved) > apply > save
+
+![Commited changes successful](./Build from Github successful.png)
+
+![Build successful](./Build artifacts successful.png)
+
+![Archieve artifacts](./Console output artifacts.png)
+
+Let's confirm the job we just did on the terminal. We do this by this command:
+`ls /var/lib/jenkins/jobs`
+
+![Job tested on terminal](./Test job on terminal.png)
+
+![Getting out information](./Information on test job on terminal.png)
+
+` cd /var/lib/jenkins/jobs`
+` cd Test1/`
+`cd builds`
+`cd 3' 3 here stands for the artifact test number.
+`cd archieve/`
+`ls`
+
+## STEP 3: CONFIGURE JENKINS TO COPY FILES TO NFS SERVER VIA SSH
+
+Now we have our artifacts saved locally on Jenkins server, the next step is to copy them to our NFS server to /mnt/apps directory.
+
+1. We're going to install "Publish Over SSH" plugins. The plugin is need so that we can send the artifacts to other servers. The steps involved are:
+
+On your Jenkins dashboard, go to:
+
+Manage Jenkins > Manage Plugins > On "Available" tab sear for "Publish Over Jenkins and install it.
+
+![Plugin installation](./Publish Over SSH installed.png)
+
+2. Configure the job/project to copy artifacts over to NFS server.
+
+Steps involved are:
+
+Jenkins dashboard > Manage Plugins > Configure System > Scroll down to "Pulish Over SSH" plugin and do the following:
+
+A. Provide a private key (content of .pem file that you use to connect to NFS server via SSH/Putty)
+B. Arbitrary name (I used NFS)
+C. Hostname – can be private IP address of your NFS server
+D. Username – ec2-user (since NFS server is based on EC2 with RHEL 8)
+E. Remote directory – /mnt/apps since our Web Servers use it as a mointing point to retrieve files from the NFS server
+
+![SSH private key](./SSH Private key pasted.png)
+
+![Test configuration](./Test config of publish over ssh.png)
+
+Save the configuration, open your Jenkins job/project configuration page and add another one "Post-build Action"
+
+Click on the Preject (Test1) > Select Configure > Scroll down to Build - Post build actions > Select "send build artifacts over SSH" in the dropdown menu > Input ** in the source file (Double asterisk means copy everything) 
+
+[Console output](./Console outpur6.png)
+I followed all necessary steps. The post build-actions gave me successful build a couple of times but last couple of builds were unstable. What could be the cause?
